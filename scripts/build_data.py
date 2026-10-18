@@ -65,8 +65,53 @@ def day(ts):
     return (ts or "")[:10]
 
 
-def normalize(raw, legislators, year):
+def requester_new(d, legs, orgs):
+    """Who asked for the draft, as (display text, kind). `requesterId` means different things by `requesterType`:
+    a legislator id for LEGISLATOR, and for agencies and committees the real requester is in `byRequestOfs`.
+    The public API publishes organization names (legislators/v1/organizations) but no committee names, so a
+    committee request reads 'Interim committee' / 'Standing committee'."""
+    t, rid = d.get("requesterType"), d.get("requesterId")
+    by = d.get("byRequestOfs") or []
+    kinds = {r["billRequestType"] for r in by} | {t}
+    if t == "LEGISLATOR":
+        leg = legs.get(rid)
+        if leg:
+            name, party = person(leg)
+            return (f"{name} ({party})" if party else name), "legislator"
+        return f"Legislator #{rid} (not in the published roster)", "legislator"
+    for r in by:
+        if r["billRequestType"] == "ORGANIZATION" and r["byRequestOfId"] in orgs:
+            return orgs[r["byRequestOfId"]], "agency"
+    if "STANDING_COMMITTEE" in kinds: return "Standing committee", "committee"
+    if "NON_STANDING_COMMITTEE" in kinds: return "Interim committee", "committee"
+    if "AGENCY" in kinds or "ORGANIZATION" in kinds: return "State agency", "agency"
+    return "", ""
+
+
+def requester_archive(b):
+    """2023 archive: `requestOf` names the committee or agency a draft was requested for; `requesters` the people."""
+    def name(x):
+        e = (x or {}).get("lawEntity") or {}
+        return f"{e.get('firstName') or ''} {e.get('lastName') or ''}".strip()
+    seen, groups = set(), []
+    for x in b.get("requestOf") or []:
+        n = name(x)
+        if n and n not in seen: seen.add(n); groups.append(n)
+    if groups:
+        return "; ".join(groups), "committee" if any(w in " ".join(groups) for w in ("Committee", "Commission", "Council")) else "agency"
+    people = []
+    for x in b.get("requesters") or []:
+        n = name(x)
+        party = ((x.get("legislator") or {}).get("politicalParty") or {}).get("partyCode")
+        label = f"{n} ({party})" if n and party else n
+        if label and label not in people: people.append(label)
+    kind = "legislator" if any((x.get("legislator") for x in b.get("requesters") or [])) else "agency"
+    return "; ".join(people), (kind if people else "")
+
+
+def normalize(raw, legislators, year, orgs=None):
     legs = {l["id"]: l for l in legislators}
+    orgs = orgs or {}
     rows = []
     for b in raw["content"]:
         d = b["draft"]
@@ -74,6 +119,7 @@ def normalize(raw, legislators, year):
         last = sts[-1] if sts else None
         numbered = bool(b.get("billNumber") and b.get("billType"))
         sponsor, party = person(legs.get(b.get("sponsorId")))
+        requester, requester_kind = requester_new(d, legs, orgs)
         row = {
             "bill": f"{b['billType']['code']}{b['billNumber']}" if numbered else None,
             "draft": d.get("draftNumber"),
@@ -82,6 +128,7 @@ def normalize(raw, legislators, year):
             "title": d.get("shortTitle") or "",
             "chamber": (b.get("billType") or {}).get("chamber"),
             "sponsor": sponsor, "party": party,
+            "requester": requester, "requester_kind": requester_kind,
             "outcome": outcome_of(b),
             "status": last["billStatusCode"]["name"] if last else "",
             "status_date": day(last["timeStamp"]) if last else day(d.get("date")),
@@ -125,11 +172,13 @@ def normalize_archive(raw, year):
         party = (leg.get("politicalParty") or {}).get("partyCode") or ""
         typ = b["billType"]
         ch = b.get("sessionLawChapterNumber")
+        requester, requester_kind = requester_archive(b)
         rows.append({
             "bill": f"{typ}{b['billNumber']}", "draft": b["id"]["billDraftNumber"], "type": typ, "number": b["billNumber"],
             "title": b.get("shortTitle") or "",
             "chamber": "HOUSE" if typ.startswith("H") else "SENATE",
             "sponsor": f"{ent.get('firstName') or ''} {ent.get('lastName') or ''}".strip(), "party": party,
+            "requester": requester, "requester_kind": requester_kind,
             "outcome": outcome_archive(b, lastname), "status": lastname, "status_date": day(last["date"]) if last else "",
             "chapter": int(ch) if ch and str(ch).isdigit() else None,
             "subjects": [tidy_subject(s["subject"]["description"]) for s in (b.get("subjects") or [])],
@@ -153,7 +202,7 @@ def write_if_changed(path, obj):
     return True
 
 
-def build(sess, raw=None, legislators=None, fetched=None):
+def build(sess, raw=None, legislators=None, fetched=None, orgs=None):
     year = sess["year"]
     archive = sess.get("api") == "archive"
     if raw is None:
@@ -172,7 +221,9 @@ def build(sess, raw=None, legislators=None, fetched=None):
             legislators = http(f"{API}/legislators/v1/legislators")
         if not raw.get("content"):
             raise SystemExit(f"{year}: API returned no bills; refusing to overwrite the last good file")
-        out = normalize(raw, legislators, year)
+        if orgs is None:
+            orgs = {o["id"]: o["name"] for o in http(f"{API}/legislators/v1/organizations")}
+        out = normalize(raw, legislators, year, orgs)
     if not sess.get("live"):  # a finished session: drafts that never became bills are noise
         out["bills"] = [r for r in out["bills"] if r["bill"]]
         out["drafts"] = len(out["bills"])

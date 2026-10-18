@@ -111,7 +111,7 @@ function buildControls() {
 function hay(r) {
   if (r._h) return r._h;
   const a = S.ai && S.ai.bills[r.bill];
-  r._h = [r.bill, r.bill && r.bill.replace(/^([A-Z]+)/, "$1 "), r.draft, r.title, r.sponsor, r.status, r.subjects.join(" "),
+  r._h = [r.bill, r.bill && r.bill.replace(/^([A-Z]+)/, "$1 "), r.draft, r.title, r.sponsor, r.requester, r.status, r.subjects.join(" "),
           a && [a.one_line, a.summary, a.area].join(" ")].filter(Boolean).join(" ").toLowerCase();
   return r._h;
 }
@@ -206,7 +206,7 @@ function renderResults() {
     : `${n0(S.rows.length)} of ${n0(total)} ${d.numbered ? "bills" : "draft requests"} match. Showing ${n0(shown)}.`;
 
   const body = $("rows"); body.replaceChildren();
-  if (!S.rows.length) body.append(el("tr", {}, el("td", {colspan: 5}, "Nothing matches. Remove a filter above, use fewer words, or choose Edit search.")));
+  if (!S.rows.length) body.append(el("tr", {}, el("td", {colspan: 6}, "Nothing matches. Remove a filter above, use fewer words, or choose Edit search.")));
   S.rows.slice(0, S.shown).forEach(r => {
     const a = S.ai && S.ai.bills[r.bill];
     body.append(el("tr", {},
@@ -214,6 +214,7 @@ function renderResults() {
       el("td", {"data-label": "Title"}, el("button", {type: "button", class: "link", onclick: () => openDetail(r)}, r.title || "(untitled)"),
         a && a.one_line ? el("div", {class: "sub"}, a.one_line + " (AI)") : null),
       el("td", {"data-label": "Sponsor"}, r.sponsor ? `${r.sponsor}${r.party ? " (" + r.party + ")" : ""}` : "Not yet assigned"),
+      el("td", {"data-label": "Requested by"}, r.requester || "Not recorded"),
       el("td", {"data-label": "Latest action"}, r.status || "—", r.status_date ? el("div", {class: "sub"}, fmtDate(r.status_date)) : null),
       el("td", {"data-label": "Outcome"}, chip(r.outcome))));
   });
@@ -228,23 +229,23 @@ function openDetail(r) {
   $("d-body").replaceChildren(el("div", {},
     el("dl", {},
       row("Outcome", chip(r.outcome)), row("Latest action", r.status ? `${r.status}${r.status_date ? " (" + fmtDate(r.status_date) + ")" : ""}` : ""),
-      row("Sponsor", r.sponsor ? `${r.sponsor}${r.party ? " (" + r.party + ")" : ""}` : ""), row("Chamber", r.chamber && r.chamber[0] + r.chamber.slice(1).toLowerCase()),
+      row("Sponsor", r.sponsor ? `${r.sponsor}${r.party ? " (" + r.party + ")" : ""}` : ""), row("Requested by", r.requester || "Not recorded"), row("Chamber", r.chamber && r.chamber[0] + r.chamber.slice(1).toLowerCase()),
       row("Draft number", r.draft), row("Session law chapter", r.chapter && String(r.chapter)),
       row("Official subjects", r.subjects.join("; ")),
       row("Notes", [r.fiscal_note && "Has a fiscal note", r.legal_note && "Has a legal note"].filter(Boolean).join("; "))),
     r.bill ? el("p", {}, el("a", {href: "https://bills.legmt.gov/", target: "_blank", rel: "noopener"}, "Open bills.legmt.gov"), ` and search for ${r.bill} to read the official text.`) : el("p", {class: "hint"}, "This is a draft request. It has no bill number, sponsor or text until it is introduced."),
-    a ? aiBlock(a) : null,
+    a ? aiBlock(a, r) : null,
     r.history && r.history.length ? [el("h3", {text: "Action history (newest first)"}), el("ol", {class: "hist", reversed: true}, [...r.history].reverse().map(([d, s]) => el("li", {}, `${fmtDate(d)}: ${s}`)))] : null));
   $("detail").showModal();
 }
-function aiBlock(a) {
+function aiBlock(a, r) {
   const list = items => items && items.length ? el("ul", {}, items.map(x => el("li", {text: x}))) : null;
   return el("section", {class: "ai", "aria-label": "AI-generated summary"},
     el("h3", {text: "AI-generated summary"}), el("p", {class: "hint"}, `Written by ${S.ai.model || "a local AI model"}. It can be wrong; check the bill text.`),
     a.one_line ? el("p", {class: "tagline", text: a.one_line}) : null, a.summary ? el("p", {text: a.summary}) : null,
     a.changes && a.changes.length ? [el("h3", {text: "What it changes"}), list(a.changes)] : null,
     a.affected && a.affected.length ? [el("h3", {text: "Who is affected"}), list(a.affected)] : null,
-    el("dl", {}, [["Policy area", a.area], ["Fiscal impact", a.fiscal && `${a.fiscal}${a.fiscal_dir && a.fiscal_dir !== "none" ? ", " + a.fiscal_dir : ""}`], ["Effective", a.effective],
+    el("dl", {}, [["Requested by", r.requester || "Not recorded"], ["Policy area", a.area], ["Fiscal impact", a.fiscal && `${a.fiscal}${a.fiscal_dir && a.fiscal_dir !== "none" ? ", " + a.fiscal_dir : ""}`], ["Effective", a.effective],
       ["Key numbers", (a.numbers || []).join("; ")]].flatMap(([k, v]) => v ? [el("dt", {text: k}), el("dd", {text: v})] : [])));
 }
 

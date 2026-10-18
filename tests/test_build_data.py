@@ -64,6 +64,43 @@ class Archive(unittest.TestCase):
         self.assertEqual(hb1["status"], "Chapter Number Assigned")
 
 
+class Requesters(unittest.TestCase):
+    ORGS = {74: "Department of Administration"}
+
+    def req(self, rtype, rid, by=()):
+        d = {"requesterType": rtype, "requesterId": rid, "byRequestOfs": [{"billRequestType": t, "byRequestOfId": i} for t, i in by]}
+        return B.requester_new(d, {7: LEGS[0]}, self.ORGS)
+
+    def test_legislator_with_party(self):
+        self.assertEqual(self.req("LEGISLATOR", 7), ("Ada Lovelace (D)", "legislator"))
+
+    def test_legislator_not_in_roster_is_still_shown(self):
+        self.assertEqual(self.req("LEGISLATOR", 999), ("Legislator #999 (not in the published roster)", "legislator"))
+
+    def test_agency_resolves_organization_name(self):
+        self.assertEqual(self.req("AGENCY", 141, [("ORGANIZATION", 74)]), ("Department of Administration", "agency"))
+
+    def test_committees_have_no_published_name(self):
+        self.assertEqual(self.req("NON_STANDING_COMMITTEE", 2, [("NON_STANDING_COMMITTEE", 2)]), ("Interim committee", "committee"))
+        self.assertEqual(self.req("STANDING_COMMITTEE", 2, [("STANDING_COMMITTEE", 2)]), ("Standing committee", "committee"))
+
+    def test_normalize_puts_requester_on_drafts_and_bills(self):
+        b = bill(None, draft="LC0003"); b["draft"].update(requesterType="LEGISLATOR", requesterId=7, byRequestOfs=[])
+        out = B.normalize({"content": [b]}, LEGS, 2027, self.ORGS)
+        self.assertEqual((out["bills"][0]["requester"], out["bills"][0]["requester_kind"]), ("Ada Lovelace (D)", "legislator"))
+
+    def test_archive_committee_and_person(self):
+        com = archive_bill(1, "HB", [("2023-01-05T10:00:00", "(H) Introduced")])
+        com["requestOf"] = [{"lawEntity": {"firstName": None, "lastName": "State Administration and Veterans' Affairs Interim Committee"}, "legislator": None}]
+        com["requesters"] = [{"lawEntity": {"firstName": "Tom", "lastName": "McGillvray"}, "legislator": {"politicalParty": {"partyCode": "R"}}}]
+        person = archive_bill(2, "HB", [("2023-01-05T10:00:00", "(H) Introduced")])
+        person["requestOf"] = []
+        person["requesters"] = [{"lawEntity": {"firstName": "Tom", "lastName": "McGillvray"}, "legislator": {"politicalParty": {"partyCode": "R"}}}]
+        out = {r["bill"]: r for r in B.normalize_archive({"bills": {"content": [com, person]}}, 2023)["bills"]}
+        self.assertEqual((out["HB1"]["requester"], out["HB1"]["requester_kind"]), ("State Administration and Veterans' Affairs Interim Committee", "committee"))
+        self.assertEqual((out["HB2"]["requester"], out["HB2"]["requester_kind"]), ("Tom McGillvray (R)", "legislator"))
+
+
 class Normalize(unittest.TestCase):
     def test_rows_sorted_and_shaped(self):
         raw = {"content": [bill(None, draft="LC0009"), bill(2, draft="LC0002"), bill(1, draft="LC0003")]}
