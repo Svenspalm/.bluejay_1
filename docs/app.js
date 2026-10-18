@@ -62,11 +62,19 @@ function hashFor() {
 // push a history entry when the page changes (so Back returns to the form); replace while just editing
 function sync(push) { (push ? history.pushState : history.replaceState).call(history, null, "", hashFor()); }
 
-function show(view, {push = true, focus = true} = {}) {
-  S.view = view; S.shown = PAGE;
-  sync(push);
+const active = () => Object.entries(S.f).some(([k, v]) => k !== "sort" && v);
+
+// Any change to the search shows the matching bills straight away, right under the filters; clearing every
+// filter returns to the browse view. History gets a new entry only when the page really switches (so Back works).
+function apply({scroll = false, all = false} = {}) {
+  const want = active() || all ? "results" : "search";
+  const switched = want !== S.view;
+  S.view = want; S.shown = PAGE;
+  sync(switched);
   render();
-  if (focus) { window.scrollTo(0, 0); (view === "results" ? $("res-h") : $("q")).focus({preventScroll: true}); }
+  if (scroll && want === "results") {          // on a phone the filters fill the screen: bring the results into view
+    const h = $("res-h"); if (h.getBoundingClientRect().top > innerHeight * 0.6) h.scrollIntoView({block: "start"});
+  }
 }
 
 // ---------- loading ----------
@@ -131,7 +139,8 @@ function render() {
   $("view-search").hidden = S.view !== "search";
   $("view-results").hidden = S.view !== "results";
   renderStatus();
-  if (S.view === "results") renderResults(); else renderSearch();
+  renderSearch();
+  if (S.view === "results") renderResults(); else document.title = "Montana Legislature Bill Tracker";
 }
 
 function renderStatus() {
@@ -154,9 +163,8 @@ function renderStatus() {
 
 // ----- search page -----
 function renderSearch() {
-  const d = S.data, f = S.f;
-  document.title = "Montana Legislature Bill Tracker";
-  const n = d.bills.filter(r => matches(r)).length, any = Object.entries(f).some(([k, v]) => k !== "sort" && v);
+  const d = S.data;
+  const n = d.bills.filter(r => matches(r)).length, any = active();
   $("go").textContent = !any ? `Show all ${n0(n)} ${d.numbered ? "bills" : "draft requests"}` : n ? `Show ${n0(n)} result${n === 1 ? "" : "s"}` : "No matches: change the search";
   $("go").disabled = any && n === 0;
 
@@ -164,7 +172,7 @@ function renderSearch() {
   const counts = new Map(); d.bills.filter(r => matches(r, "o")).forEach(r => counts.set(r.outcome, (counts.get(r.outcome) || 0) + 1));
   const tiles = $("outcome-tiles"); tiles.replaceChildren();
   for (const o of Object.keys(OUTCOMES)) if (counts.has(o))
-    tiles.append(el("button", {type: "button", class: "tile", "aria-label": `Show ${n0(counts.get(o))} ${o} bills`, onclick: () => { S.f.o = o; $("f-outcome").value = o; show("results"); }},
+    tiles.append(el("button", {type: "button", class: "tile", "aria-label": `Show ${n0(counts.get(o))} ${o} bills`, onclick: () => { S.f.o = o; $("f-outcome").value = o; apply({scroll: true}); }},
       el("span", {class: "n"}, n0(counts.get(o))), el("span", {class: "l"}, OUTCOMES[o].sym + " " + o)));
   if (!counts.size) tiles.append(el("p", {class: "hint"}, "No bills match the filters above."));
 
@@ -172,7 +180,7 @@ function renderSearch() {
   const top = [...sc].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 12);
   const max = Math.max(1, ...top.map(t => t[1])), bars = $("subject-bars"); bars.replaceChildren();
   top.forEach(([s, c]) => bars.append(el("li", {}, el("button", {type: "button", "aria-label": `Show ${n0(c)} bills on ${s}`,
-    onclick: () => { S.f.s = s; $("f-subject").value = s; show("results"); }},
+    onclick: () => { S.f.s = s; $("f-subject").value = s; apply({scroll: true}); }},
     el("span", {text: s}), el("span", {class: "track", "aria-hidden": "true"}, el("span", {class: "fill", style: `width:${(c / max * 100).toFixed(1)}%`})), el("span", {class: "v", text: n0(c)})))));
   if (!top.length) bars.append(el("li", {class: "hint", text: "No subjects for the current filters."}));
 }
@@ -188,7 +196,7 @@ function renderResults() {
   for (const [k, lab] of Object.entries(FILTER_LABELS)) if (f[k]) {
     const text = lab(f[k]);
     act.append(el("li", {}, el("span", {class: "pill"}, text,
-      el("button", {type: "button", class: "x", "aria-label": `Remove ${text}`, onclick: () => { f[k] = k === "fiscal" ? false : ""; buildControls(); show("results", {push: false, focus: false}); $("res-h").focus({preventScroll: true}); }}, "×"))));
+      el("button", {type: "button", class: "x", "aria-label": `Remove ${text}`, onclick: () => { f[k] = k === "fiscal" ? false : ""; buildControls(); apply(); }}, "×"))));
   }
   if (!act.children.length) act.append(el("li", {class: "hint"}, "No filters: showing every bill."));
 
@@ -242,18 +250,20 @@ function aiBlock(a) {
 
 // ---------- wiring ----------
 function bind() {
-  // on the search page, fields only edit the pending search; the button opens the results page
-  const edit = (id, k) => $(id).addEventListener("change", e => { S.f[k] = e.target.type === "checkbox" ? e.target.checked : e.target.value; sync(false); renderSearch(); });
+  // every change applies at once: the matching bills appear under the filters
+  const edit = (id, k) => $(id).addEventListener("change", e => { S.f[k] = e.target.type === "checkbox" ? e.target.checked : e.target.value; apply({scroll: true}); });
   edit("f-outcome", "o"); edit("f-type", "t"); edit("f-party", "p"); edit("f-subject", "s"); edit("f-area", "a"); edit("f-fiscal", "fiscal");
-  $("q").addEventListener("input", e => { S.f.q = e.target.value.trim(); sync(false); renderSearch(); });
-  $("search-form").addEventListener("submit", e => { e.preventDefault(); if (!$("go").disabled) show("results"); });
-  $("clear").addEventListener("click", () => { const sort = S.f.sort; S.f = EMPTY(); S.f.sort = sort; buildControls(); sync(false); renderSearch(); $("q").focus(); });
+  let t; $("q").addEventListener("input", e => { clearTimeout(t); t = setTimeout(() => { S.f.q = e.target.value.trim(); apply(); }, 300); });
+  $("search-form").addEventListener("submit", e => {   // Enter or the button: apply now, and show every bill if nothing is filtered
+    e.preventDefault(); clearTimeout(t); S.f.q = $("q").value.trim();
+    if (!$("go").disabled) { apply({scroll: true, all: true}); $("res-h").focus({preventScroll: true}); }
+  });
+  const reset = () => { const sort = S.f.sort; S.f = EMPTY(); S.f.sort = sort; buildControls(); apply(); };
+  $("clear").addEventListener("click", () => { reset(); $("q").focus(); });
 
   $("sort").addEventListener("change", e => { S.f.sort = e.target.value; S.shown = PAGE; sync(false); renderResults(); });
   $("more").addEventListener("click", () => { S.shown += PAGE; renderResults(); });
-  $("edit-search").addEventListener("click", () => { buildControls(); show("search"); });
-  $("new-search").addEventListener("click", () => { S.f = EMPTY(); buildControls(); show("search"); });
-  $("home-link").addEventListener("click", e => { e.preventDefault(); S.f = EMPTY(); buildControls(); show("search"); });
+  $("home-link").addEventListener("click", e => { e.preventDefault(); reset(); window.scrollTo(0, 0); });
 
   $("session").addEventListener("change", e => { S.f = EMPTY(); S.view = "search"; loadSession(+e.target.value).then(() => sync(true)).catch(showError); });
   $("d-close").addEventListener("click", () => $("detail").close());

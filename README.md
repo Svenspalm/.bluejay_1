@@ -20,7 +20,10 @@ an hour earlier on the clock.
 ## Sessions
 
 `docs/data/sessions.json` lists them. Only `"live": true` sessions are refreshed. To add one, look up its id with
-`curl https://api.legmt.gov/legislators/v1/sessions` and add a row. 2027 (70th Legislature, session id 3) convenes
+`curl https://api.legmt.gov/legislators/v1/sessions` (2025 on) or `curl https://api.legmt.gov/archive/v1/sessions` (2023
+and earlier, add `"api": "archive"`) and add a row, then run `python3 scripts/build_data.py --year <year>`.
+The page opens on the newest session that has numbered bills (`build_data.py` keeps `"default"` current), so it never
+lands on a session that only has draft requests; 2027 takes over by itself once its first bill is numbered. 2027 (70th Legislature, session id 3) convenes
 2027-01-04; until then the API has only draft requests, and the page says so.
 
 ## Commandcenter schedule

@@ -1,7 +1,27 @@
 {
   "sessions": [
-    {"year": 2027, "id": 3, "legislature": "70th", "convenes": "2027-01-04", "live": true},
-    {"year": 2025, "id": 2, "legislature": "69th", "convenes": "2025-01-06", "live": false}
+    {
+      "year": 2027,
+      "id": 3,
+      "legislature": "70th",
+      "convenes": "2027-01-04",
+      "live": true
+    },
+    {
+      "year": 2025,
+      "id": 2,
+      "legislature": "69th",
+      "convenes": "2025-01-06",
+      "live": false
+    },
+    {
+      "year": 2023,
+      "id": 20231,
+      "api": "archive",
+      "legislature": "68th",
+      "convenes": "2023-01-02",
+      "live": false
+    }
   ],
-  "default": 2027
+  "default": 2025
 }

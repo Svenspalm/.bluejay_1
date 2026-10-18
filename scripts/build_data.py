@@ -12,7 +12,7 @@ Writes, per session:
 Standard library only, so the Action needs no pip install. Exit 0 on success, 1 on any fetch/parse failure
 (the previous bills.json is left untouched, so a failed refresh never publishes half a file).
 """
-import argparse, json, os, sys, time, urllib.request, urllib.error
+import argparse, json, os, re, sys, time, urllib.request, urllib.error
 from datetime import datetime, timezone
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -38,11 +38,14 @@ def http(url, body=None, tries=4):
 
 
 def outcome_of(b):
-    """Same rules as the analysis pipeline (montana/analyze.py), plus 'In progress' for live bills."""
+    """Outcome from the final status. A veto that was polled for override but not overridden stays Vetoed:
+    the API marks those `VETO_NOT_OVERRIDDEN` and they get no session-law chapter. (The first pipeline version
+    counted every "Veto Override" status as Enacted, which put 24 vetoed 2025 bills in the enacted column.)"""
     st = b["draft"].get("billStatuses") or []
     last = st[-1]["billStatusCode"]["name"] if st else ""
+    result = (st[-1].get("result") or "") if st else ""
     if b.get("sessionLawChapterNumber"): return "Enacted"
-    if "Veto Override" in last: return "Enacted"
+    if "Veto Override" in last: return "Enacted" if result == "VETO_OVERRIDDEN" else "Vetoed"
     if "Vetoed" in last: return "Vetoed"
     if "Filed with Secretary of State" in last: return "Adopted (resolution)"
     if "Withdrawn" in last: return "Withdrawn"
@@ -94,6 +97,49 @@ def normalize(raw, legislators, year):
     return {"year": year, "drafts": len(rows), "numbered": numbered_n, "bills": rows}
 
 
+# ---- archive format (2023 and earlier): POST /archive/v1/bills/search {"sessionId": <20231>} ----
+def outcome_archive(b, last):
+    if b.get("sessionLawChapterNumber") or last == "Chapter Number Assigned": return "Enacted"
+    if "Veto" in last: return "Vetoed"          # "Vetoed by Governor", "Veto Override Failed in Legislature"
+    if "Filed with Secretary of State" in last: return "Adopted (resolution)"
+    if "Withdrawn" in last: return "Withdrawn"
+    if any(w in last for w in ("Died", "Tabled", "Missed Deadline", "Postponed")): return "Failed"
+    return "In progress" if b.get("billNumber") else "Draft request"
+
+
+def tidy_subject(s):
+    """Archive subjects read 'Health Care Services (see also: Health)' and 'Professions and Occupations  Generally'."""
+    return " ".join(re.sub(r"\s*\(see also:[^)]*\)\s*$", "", s).split())
+
+
+def normalize_archive(raw, year):
+    rows = []
+    for b in raw["bills"]["content"]:
+        if not b.get("billNumber"): continue    # archived sessions: drafts that never became bills are noise
+        acts = sorted(b.get("billActions") or [], key=lambda a: a["date"])   # the API lists newest first
+        last = acts[-1] if acts else None
+        lastname = last["actionType"]["description"] if last else ""
+        role = (b.get("primarySponsorBillRoles") or [{}])[0]
+        ent = role.get("lawEntity") or {}
+        leg = role.get("legislator") or {}
+        party = (leg.get("politicalParty") or {}).get("partyCode") or ""
+        typ = b["billType"]
+        ch = b.get("sessionLawChapterNumber")
+        rows.append({
+            "bill": f"{typ}{b['billNumber']}", "draft": b["id"]["billDraftNumber"], "type": typ, "number": b["billNumber"],
+            "title": b.get("shortTitle") or "",
+            "chamber": "HOUSE" if typ.startswith("H") else "SENATE",
+            "sponsor": f"{ent.get('firstName') or ''} {ent.get('lastName') or ''}".strip(), "party": party,
+            "outcome": outcome_archive(b, lastname), "status": lastname, "status_date": day(last["date"]) if last else "",
+            "chapter": int(ch) if ch and str(ch).isdigit() else None,
+            "subjects": [tidy_subject(s["subject"]["description"]) for s in (b.get("subjects") or [])],
+            "fiscal_note": bool(b.get("hasFiscalNote")), "legal_note": False,
+            "history": [[day(a["date"]), a["actionType"]["description"]] for a in acts],
+        })
+    rows.sort(key=lambda r: (r["type"], r["number"]))
+    return {"year": year, "drafts": len(rows), "numbered": len(rows), "bills": rows}
+
+
 def write_if_changed(path, obj):
     text = json.dumps(obj, separators=(",", ":"), ensure_ascii=False)
     if os.path.exists(path):
@@ -109,15 +155,24 @@ def write_if_changed(path, obj):
 
 def build(sess, raw=None, legislators=None, fetched=None):
     year = sess["year"]
+    archive = sess.get("api") == "archive"
     if raw is None:
-        print(f"{year}: fetching bills (session id {sess['id']})", file=sys.stderr)
-        raw = http(f"{API}/bills/v1/bills/search?includeCounts=true&sort=billType.code,desc&sort=billNumber,asc"
-                   f"&sort=draft.draftNumber,asc&limit=9999&offset=0", {"sessionIds": [sess["id"]]})
-    if legislators is None:
-        legislators = http(f"{API}/legislators/v1/legislators")
-    if not raw.get("content"):
-        raise SystemExit(f"{year}: API returned no bills; refusing to overwrite the last good file")
-    out = normalize(raw, legislators, year)
+        print(f"{year}: fetching bills (session id {sess['id']}{', archive API' if archive else ''})", file=sys.stderr)
+        if archive:
+            raw = http(f"{API}/archive/v1/bills/search?limit=9999&offset=0", {"sessionId": sess["id"]})
+        else:
+            raw = http(f"{API}/bills/v1/bills/search?includeCounts=true&sort=billType.code,desc&sort=billNumber,asc"
+                       f"&sort=draft.draftNumber,asc&limit=9999&offset=0", {"sessionIds": [sess["id"]]})
+    if archive:
+        if not (raw.get("bills") or {}).get("content"):
+            raise SystemExit(f"{year}: archive API returned no bills; refusing to overwrite the last good file")
+        out = normalize_archive(raw, year)
+    else:
+        if legislators is None:
+            legislators = http(f"{API}/legislators/v1/legislators")
+        if not raw.get("content"):
+            raise SystemExit(f"{year}: API returned no bills; refusing to overwrite the last good file")
+        out = normalize(raw, legislators, year)
     if not sess.get("live"):  # a finished session: drafts that never became bills are noise
         out["bills"] = [r for r in out["bills"] if r["bill"]]
         out["drafts"] = len(out["bills"])
@@ -153,6 +208,23 @@ def main():
     prev["sessions"].update(status)
     prev["generated"] = now
     open(sp, "w").write(json.dumps(prev, indent=1))
+    set_default(cfg)
+
+
+def set_default(cfg):
+    """The page opens on the newest session that has real bills, not on one that only has draft requests.
+    When a new session numbers its first bill this flips by itself on the next refresh."""
+    for s in sorted(cfg["sessions"], key=lambda s: -s["year"]):
+        p = os.path.join(DATA, str(s["year"]), "bills.json")
+        if os.path.exists(p):
+            with open(p, encoding="utf-8") as f:
+                if json.load(f).get("numbered"):
+                    if cfg.get("default") != s["year"]:
+                        cfg["default"] = s["year"]
+                        with open(os.path.join(DATA, "sessions.json"), "w") as out:
+                            out.write(json.dumps(cfg, indent=2) + "\n")
+                        print(f"default session is now {s['year']}", file=sys.stderr)
+                    return
 
 
 if __name__ == "__main__":
