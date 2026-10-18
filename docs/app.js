@@ -126,7 +126,7 @@ function render() {
   $("headline").textContent = d.numbered === 0
     ? `${n0(d.drafts)} draft requests filed for the ${cfg.legislature} Legislature. No bills have been introduced yet: bill numbers, sponsors and text appear after it convenes on ${fmtDate(cfg.convenes)}.`
     : `${n0(d.numbered)} bills introduced: ${n0(inProg)} in progress, ${n0(enacted)} enacted.`;
-  const ss = S.status && S.status.sessions[S.year], asof = $("asof");
+  const ss = (S.status && S.status.sessions[S.year]) || (d.fetched && {fetched: d.fetched}), asof = $("asof");
   asof.replaceChildren();
   const box = $("status-box"); box.classList.remove("stale");
   if (ss) {

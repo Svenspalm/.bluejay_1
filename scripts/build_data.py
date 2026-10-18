@@ -107,7 +107,7 @@ def write_if_changed(path, obj):
     return True
 
 
-def build(sess, raw=None, legislators=None):
+def build(sess, raw=None, legislators=None, fetched=None):
     year = sess["year"]
     if raw is None:
         print(f"{year}: fetching bills (session id {sess['id']})", file=sys.stderr)
@@ -121,6 +121,7 @@ def build(sess, raw=None, legislators=None):
     if not sess.get("live"):  # a finished session: drafts that never became bills are noise
         out["bills"] = [r for r in out["bills"] if r["bill"]]
         out["drafts"] = len(out["bills"])
+        if fetched: out["fetched"] = fetched  # committed with the data: status.json is not committed and only covers live sessions
     changed = write_if_changed(os.path.join(DATA, str(year), "bills.json"), out)
     print(f"{year}: {out['drafts']} drafts, {out['numbered']} numbered bills, "
           f"{'updated' if changed else 'unchanged'}", file=sys.stderr)
@@ -142,9 +143,9 @@ def main():
     for s in todo:
         raw = json.load(open(a.from_raw)) if a.from_raw else None
         legs = json.load(open(a.legislators)) if a.legislators else None
-        out, changed = build(s, raw, legs)
         # a rebuild from a saved response is stamped with that file's age, not "now"
         when = datetime.fromtimestamp(os.path.getmtime(a.from_raw), timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ") if a.from_raw else now
+        out, changed = build(s, raw, legs, fetched=when)
         status[str(s["year"])] = {"fetched": when, "drafts": out["drafts"], "numbered": out["numbered"], "changed": changed}
     # merge into any existing status so a one-session run does not drop the others
     sp = os.path.join(DATA, "status.json")
