@@ -8,11 +8,11 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<a class="skip" href="#results">Skip to results</a>
+<a class="skip" href="#main">Skip to content</a>
 
 <header class="top">
   <div class="wrap">
-    <h1>Montana Legislature Bill Tracker</h1>
+    <h1><a href="#" id="home-link">Montana Legislature Bill Tracker</a></h1>
     <div class="session-pick">
       <label for="session">Session</label>
       <select id="session"></select>
@@ -20,54 +20,67 @@
   </div>
 </header>
 
-<main class="wrap">
+<main class="wrap" id="main" tabindex="-1">
   <section aria-labelledby="status-h" class="status" id="status-box">
     <h2 id="status-h" class="sr">Data status</h2>
     <p id="headline" class="headline" aria-live="polite">Loading…</p>
     <p id="asof" class="asof"></p>
   </section>
 
-  <section aria-labelledby="out-h" class="outcomes">
-    <h2 id="out-h" class="sr">Bills by outcome</h2>
-    <div id="outcome-tiles" class="tiles"></div>
-  </section>
+  <!-- ===== Search page ===== -->
+  <div id="view-search">
+    <form id="search-form" class="filters" role="search" aria-label="Search bills" novalidate>
+      <div class="field wide">
+        <label for="q">Search bills, titles, sponsors, subjects and summaries</label>
+        <input id="q" type="search" autocomplete="off" placeholder="for example: property tax, HB 2, Keenan">
+      </div>
+      <div class="field"><label for="f-outcome">Outcome</label><select id="f-outcome"></select></div>
+      <div class="field"><label for="f-type">Bill type</label><select id="f-type"></select></div>
+      <div class="field"><label for="f-party">Sponsor party</label><select id="f-party"></select></div>
+      <div class="field"><label for="f-subject">Official subject</label><select id="f-subject"></select></div>
+      <div class="field" id="area-field" hidden><label for="f-area">Policy area (AI-assigned)</label><select id="f-area"></select></div>
+      <div class="field check"><input id="f-fiscal" type="checkbox"><label for="f-fiscal">Has a fiscal note</label></div>
+      <div class="field actions wide">
+        <button id="go" type="submit" class="primary">Show results</button>
+        <button id="clear" type="button" class="quiet">Clear all</button>
+      </div>
+    </form>
 
-  <section class="filters" aria-labelledby="filt-h">
-    <h2 id="filt-h" class="sr">Search and filter</h2>
-    <div class="field wide">
-      <label for="q">Search bills, titles, sponsors, subjects and summaries</label>
-      <input id="q" type="search" autocomplete="off" placeholder="for example: property tax, HB 2, Keenan">
+    <section aria-labelledby="out-h" class="outcomes">
+      <h2 id="out-h">Browse by outcome</h2>
+      <div id="outcome-tiles" class="tiles"></div>
+    </section>
+
+    <section class="subjects" aria-labelledby="subj-h">
+      <h2 id="subj-h">Browse by official subject</h2>
+      <p class="hint">Select a subject to see its bills. Counts follow the filters above.</p>
+      <ul id="subject-bars" class="bars"></ul>
+    </section>
+  </div>
+
+  <!-- ===== Results page ===== -->
+  <div id="view-results" hidden>
+    <p class="crumbs">
+      <button id="edit-search" type="button" class="quiet">← Edit search</button>
+      <button id="new-search" type="button" class="quiet">New search</button>
+    </p>
+    <h2 id="res-h" tabindex="-1">Search results</h2>
+    <ul id="active" class="active" aria-label="Search terms and filters in use"></ul>
+    <div class="toolbar">
+      <p id="count" class="count" aria-live="polite"></p>
+      <div class="field sort"><label for="sort">Sort by</label>
+        <select id="sort">
+          <option value="number">Bill number</option>
+          <option value="recent">Latest action first</option>
+          <option value="title">Title A–Z</option>
+        </select></div>
     </div>
-    <div class="field"><label for="f-outcome">Outcome</label><select id="f-outcome"></select></div>
-    <div class="field"><label for="f-type">Bill type</label><select id="f-type"></select></div>
-    <div class="field"><label for="f-party">Sponsor party</label><select id="f-party"></select></div>
-    <div class="field"><label for="f-subject">Official subject</label><select id="f-subject"></select></div>
-    <div class="field" id="area-field" hidden><label for="f-area">Policy area (AI-assigned)</label><select id="f-area"></select></div>
-    <div class="field"><label for="sort">Sort by</label>
-      <select id="sort">
-        <option value="number">Bill number</option>
-        <option value="recent">Latest action first</option>
-        <option value="title">Title A–Z</option>
-      </select></div>
-    <div class="field check"><input id="f-fiscal" type="checkbox"><label for="f-fiscal">Has a fiscal note</label></div>
-    <div class="field actions"><button id="clear" type="button" class="quiet">Clear all filters</button></div>
-  </section>
-
-  <section class="subjects" aria-labelledby="subj-h">
-    <h2 id="subj-h">Most common official subjects</h2>
-    <p class="hint">Select a subject to filter the list. Counts follow the other filters.</p>
-    <ul id="subject-bars" class="bars"></ul>
-  </section>
-
-  <section aria-labelledby="res-h" id="results" tabindex="-1">
-    <h2 id="res-h">Bills</h2>
-    <p id="count" class="count" aria-live="polite"></p>
     <table class="list">
       <thead><tr><th scope="col">Bill</th><th scope="col">Title</th><th scope="col">Sponsor</th><th scope="col">Latest action</th><th scope="col">Outcome</th></tr></thead>
       <tbody id="rows"></tbody>
     </table>
     <div class="more"><button id="more" type="button" hidden>Show 50 more bills</button></div>
-  </section>
+  </div>
 </main>
 
 <footer class="wrap foot">
