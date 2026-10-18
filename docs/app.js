@@ -140,7 +140,7 @@ function render() {
   $("view-results").hidden = S.view !== "results";
   renderStatus();
   renderSearch();
-  if (S.view === "results") renderResults(); else document.title = "Montana Legislature Bill Tracker";
+  if (S.view === "results") renderResults(); else document.title = ".bluejay · Montana Legislature Bill Tracker";
 }
 
 function renderStatus() {
@@ -189,7 +189,7 @@ function renderSearch() {
 function renderResults() {
   const d = S.data, f = S.f;
   S.rows = d.bills.filter(r => matches(r)).sort(sorters[f.sort]);
-  document.title = `${S.rows.length} result${S.rows.length === 1 ? "" : "s"} · Montana Legislature Bill Tracker`;
+  document.title = `${S.rows.length} result${S.rows.length === 1 ? "" : "s"} · .bluejay`;
 
   // what was searched, each removable
   const act = $("active"); act.replaceChildren();

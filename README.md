@@ -1,5 +1,8 @@
 # Montana Legislature Bill Tracker
 
+The service is called **.bluejay**. The logo (the jay and the wordmark, lettering embedded as base64) lives in `docs/brand/`, with the
+open-license notice for the font. It is the header banner and the browser-tab icon.
+
 A static dashboard (GitHub Pages) to read, search and filter every Montana Legislature bill, with the bill list
 refreshed from the Legislature's public API three times a day.
 

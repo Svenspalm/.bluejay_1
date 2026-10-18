@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label=".bluejay icon"><title>.bluejay icon</title><rect width="256" height="256" rx="52" fill="#1f5f8b"/><g transform="translate(28,34)">
+  <path d="M72,70 L36,10 L98,60 Z" fill="#6fb0e6"/>
+  <path d="M90,56 L80,2 L116,58 Z" fill="#6fb0e6"/>
+  <circle cx="100" cy="108" r="60" fill="#9ccbf0"/>
+  <path d="M157.9,123.5 A60,60 0 0 1 42,123.5 C66,104 122,108 157.9,123.5 Z" fill="#ffffff"/>
+  <path d="M50.2,131.2 A55,55 0 0 0 149.8,131.2" fill="none" stroke="#0f3d5e" stroke-width="11" stroke-linecap="round"/>
+  <path d="M152,100 L196,110 L152,126 Z" fill="#0b1f31" stroke="#0b1f31" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M150,104 L98,94" fill="none" stroke="#0f3d5e" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="114" cy="96" r="8" fill="#0b1f31"/>
+  <circle cx="116.5" cy="93.5" r="2.6" fill="#ffffff"/></g></svg>
