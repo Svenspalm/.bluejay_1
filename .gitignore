@@ -1,0 +1,4 @@
+docs/data/status.json
+__pycache__/
+*.tmp
+.claude/

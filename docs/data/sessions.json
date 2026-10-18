@@ -1,0 +1,7 @@
+{
+  "sessions": [
+    {"year": 2027, "id": 3, "legislature": "70th", "convenes": "2027-01-04", "live": true},
+    {"year": 2025, "id": 2, "legislature": "69th", "convenes": "2025-01-06", "live": false}
+  ],
+  "default": 2027
+}
