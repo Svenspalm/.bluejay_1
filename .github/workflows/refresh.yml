@@ -50,6 +50,11 @@ jobs:
             git push origin HEAD:main
           fi
 
+      # Pages serves assets with a 10-minute cache. Without a version in the URL a visitor could get the new
+      # page with the previous app.js. Stamp it into the deployed copy only (the committed file keeps __V__).
+      - name: Stamp asset version
+        run: sed -i "s/__V__/${GITHUB_SHA::8}-${GITHUB_RUN_ID}/g" docs/index.html
+
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3
