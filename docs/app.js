@@ -49,7 +49,7 @@ function readHash() {
   const h = new URLSearchParams(location.hash.slice(1));
   S.f = EMPTY();
   for (const [k, hk] of Object.entries(HKEYS)) if (h.has(hk)) S.f[k] = k === "fiscal" ? h.get(hk) === "1" : h.get(hk);
-  S.view = h.get("v") === "results" ? "results" : "search";
+  S.view = h.get("v") === "results" || active() ? "results" : "search";   // a link carrying any filter opens its results
   return h.get("y") ? +h.get("y") : null;
 }
 function hashFor() {
